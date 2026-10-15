@@ -1,5 +1,6 @@
 """Phase 8 CLI tests: init auto-detect, explain, migrate, update, doctor."""
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -125,8 +126,16 @@ class UpdateTests(unittest.TestCase):
 
     def test_bench_doctor_delegates(self):
         result = cli("bench", "doctor", cwd=ROOT)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("Benchmark readiness: PASS", result.stdout)
+        output = result.stdout + result.stderr
+        # Delegation must reach the bench doctor; readiness depends on the
+        # external `agy` CLI which is absent in CI.
+        self.assertIn("Benchmark readiness:", result.stdout)
+        if shutil.which("agy") is None:
+            self.assertEqual(result.returncode, 1, output)
+            self.assertIn("BLOCKED", result.stdout)
+        else:
+            self.assertEqual(result.returncode, 0, output)
+            self.assertIn("Benchmark readiness: PASS", result.stdout)
 
 
 class DoctorTests(unittest.TestCase):

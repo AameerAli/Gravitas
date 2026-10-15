@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -179,7 +180,18 @@ class BenchmarkRunnerTests(unittest.TestCase):
         doctor = subprocess.run(
             [sys.executable, str(ROOT / "benchmarks/cli.py"), "doctor"],
             text=True, capture_output=True, cwd=ROOT, check=False)
-        self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
+        output = doctor.stdout + doctor.stderr
+        # Doctor correctly reports BLOCKED when the external `agy` CLI is
+        # absent (e.g. CI). Only require PASS when `agy` is installed.
+        if shutil.which("agy") is None:
+            self.assertEqual(doctor.returncode, 1, output)
+            self.assertIn("agy not found", output)
+            self.assertIn("BLOCKED", output)
+            # Manifest/spec checks must still pass; only `agy` blocks.
+            self.assertNotIn("missing task specs", output)
+            self.assertNotIn("manifest unreadable", output)
+        else:
+            self.assertEqual(doctor.returncode, 0, output)
         with tempfile.TemporaryDirectory() as directory:
             build = subprocess.run(
                 [sys.executable, str(ROOT / "benchmarks/cli.py"), "build-corpus",
